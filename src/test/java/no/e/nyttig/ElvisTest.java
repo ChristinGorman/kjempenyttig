@@ -18,6 +18,18 @@ public class ElvisTest {
     }
 
     @Test
+    public void should_return_null_instance() {
+        TestClass instance = null;
+        assertNull(new Elvis<>(TestClass.class).nullSafe(instance).answer());
+    }
+
+    @Test
+    public void should_return_real_value_instance() {
+        TestClass instance = new TestClass();
+        assertEquals(42, new Elvis<>(TestClass.class).nullSafe(instance).answer().intValue());
+    }
+
+    @Test
     public void should_return_null_static() {
         TestClass instance = null;
         TestClass nullSafe = nullSafe(TestClass.class, instance);
@@ -42,6 +54,7 @@ public class ElvisTest {
     public void returns_null_with_arguments() {
         TestClass instance = null;
         TestClass nullSafe = nullSafe(TestClass.class, instance);
-        assertNull(nullSafe.withArguments(2,"you"));
+        assertNull(nullSafe.withArguments(2, "you"));
     }
+
 }

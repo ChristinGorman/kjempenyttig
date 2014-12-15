@@ -13,6 +13,10 @@ public class Elvis<T> {
         this.klass = klass;
     }
 
+    public T nullSafe(T instance) {
+        return nullSafe(klass, instance);
+    }
+
     public static <T> T nullSafe(Class<T> klass, final T instance){
         try {
             ProxyFactory factory = new ProxyFactory();
