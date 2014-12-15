@@ -47,19 +47,14 @@ public class Elvis<T> {
 
     public static <T> T nullSafe(Class<T> klass, final Object instance){
         try {
+            if (Modifier.isFinal(klass.getModifiers())) return (T)instance;
             ProxyFactory factory = new ProxyFactory();
             factory.setSuperclass(klass);
             Class clazz = factory.createClass();
-            MethodHandler handler = new MethodHandler() {
-                @Override
-                public Object invoke(Object self, Method overridden, Method forwarder, Object[] args) throws Throwable {
-                    Object returnval = (instance != null) ? overridden.invoke(instance, args) : null;
-                    if  (Modifier.isFinal(overridden.getReturnType().getModifiers())) {
-                        return returnval;
-                    }else {
-                        return nullSafe(overridden.getReturnType(), returnval);
-                    }
-                }
+            MethodHandler handler = (self, overridden, forwarder, args) -> {
+                Object returnval = (instance != null) ? overridden.invoke(instance, args) : null;
+                return nullSafe(overridden.getReturnType(), returnval);
+
             };
             Object proxyInstance = clazz.newInstance();
             ((ProxyObject) proxyInstance).setHandler(handler);

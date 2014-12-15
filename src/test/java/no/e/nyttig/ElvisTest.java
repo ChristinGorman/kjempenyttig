@@ -1,14 +1,19 @@
 package no.e.nyttig;
 
+
 import org.junit.Test;
 
 import static no.e.nyttig.Elvis.nullSafe;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertNotSame;
 
 public class ElvisTest {
 
+
     public static class TestClass {
+        Nested nested = new Nested();
         public Integer answer() {
             return 42;
         }
@@ -17,13 +22,14 @@ public class ElvisTest {
         }
 
         public Nested nestedClass() {
-            return new Nested();
+            return nested;
         }
     }
 
     public static class Nested {
+        static final String HELLO = "Hello";
         public String hello() {
-            return "Hello";
+            return HELLO;
         }
     }
 
@@ -79,6 +85,27 @@ public class ElvisTest {
         TestClass instance = new TestClass();
         TestClass nullSafe = nullSafe(TestClass.class, instance);
         assertEquals("Hello", nullSafe.nestedClass().hello());
+    }
+
+    @Test
+    public void should_not_try_to_proxy_final_classes() {
+        String hello = "Hello";
+        String s = nullSafe(String.class, hello);
+        assertSame(hello, s);
+    }
+
+    @Test
+    public void should_return_final_return_values_without_proxy() {
+        TestClass instance = new TestClass();
+        TestClass nullSafe = nullSafe(TestClass.class, instance);
+        assertSame(Nested.HELLO, nullSafe.nestedClass().hello());
+    }
+
+    @Test
+    public void should_return_proxy_for_non_finals() {
+        TestClass instance = new TestClass();
+        TestClass nullSafe = nullSafe(TestClass.class, instance);
+        assertNotSame(instance.nested, nullSafe.nestedClass());
     }
 
 }
