@@ -1,13 +1,10 @@
 package no.e.nyttig;
 
-
 import org.junit.Test;
+import org.junit.Ignore;
 
 import static no.e.nyttig.Elvis.nullSafe;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.*;
 
 public class ElvisTest {
 
@@ -108,4 +105,30 @@ public class ElvisTest {
         assertNotSame(instance.nested, nullSafe.nestedClass());
     }
 
+
+    /**
+     * Simple test to show that it takes about 15 times longer to execute this nonsense than the traditional if-else check
+     */
+    @Test
+    @Ignore
+    public void speed() {
+        long stamp = System.currentTimeMillis();
+        for (int i = 0; i < 1000; i++) {
+            TestClass test = new TestClass();
+            if (test != null && test.nestedClass() != null) {
+                System.out.print(test.nestedClass().hello().charAt(0));
+            }
+        }
+
+        System.out.print("\nOld: ");
+        System.out.println((System.currentTimeMillis() - stamp));
+
+        stamp = System.currentTimeMillis();
+        for (int i = 0; i < 1000; i++) {
+            System.out.print(nullSafe(TestClass.class, new TestClass()).nestedClass().hello().charAt(0));
+        }
+
+        System.out.print("\nProxified: ");
+        System.out.println((System.currentTimeMillis() - stamp));
+    }
 }
