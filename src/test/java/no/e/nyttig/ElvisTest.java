@@ -15,6 +15,16 @@ public class ElvisTest {
         public String withArguments(int one, String two) {
             return String.format("Hello %s-%d", two, one);
         }
+
+        public Nested nestedClass() {
+            return new Nested();
+        }
+    }
+
+    public static class Nested {
+        public String hello() {
+            return "Hello";
+        }
     }
 
     @Test
@@ -55,6 +65,20 @@ public class ElvisTest {
         TestClass instance = null;
         TestClass nullSafe = nullSafe(TestClass.class, instance);
         assertNull(nullSafe.withArguments(2, "you"));
+    }
+
+    @Test
+    public void should_return_null_on_nested_values() {
+        TestClass instance = null;
+        TestClass nullSafe = nullSafe(TestClass.class, instance);
+        assertNull(nullSafe.nestedClass().hello());
+    }
+
+    @Test
+    public void should_return_real_value_on_nested_values() {
+        TestClass instance = new TestClass();
+        TestClass nullSafe = nullSafe(TestClass.class, instance);
+        assertEquals("Hello", nullSafe.nestedClass().hello());
     }
 
 }
