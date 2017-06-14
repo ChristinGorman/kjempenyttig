@@ -3,6 +3,7 @@ package no.e.nyttig.niosockets;
 
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.net.Socket;
@@ -16,12 +17,16 @@ public class ServerSocketPollerTest {
     ExecutorService executor = Executors.newFixedThreadPool(10);
     ServerSocketPoller poller = new ServerSocketPoller();
 
+    @Before
+    public void setup() {
+        executor.execute(poller);
+    }
+
     @Test
     public void reads_sentences() throws Exception{
         BlockingQueue<String> sentences = new LinkedBlockingQueue<>();
         Server server = new SentenceServer(sentences::offer);
         poller.registerServer(server);
-        executor.execute(poller);
 
         Socket s = new Socket("localhost", server.channel.socket().getLocalPort());
         s.getOutputStream().write("Hello ".getBytes());
@@ -39,7 +44,6 @@ public class ServerSocketPollerTest {
         BlockingQueue<String> sentences = new LinkedBlockingQueue<>();
         Server server = new SentenceServer(sentences::offer);
         poller.registerServer(server);
-        executor.execute(poller);
 
         Socket s = new Socket("localhost", server.channel.socket().getLocalPort());
         s.getOutputStream().write("Hello ".getBytes());
@@ -68,7 +72,6 @@ public class ServerSocketPollerTest {
         poller.registerServer(sentenceServer);
         poller.registerServer(commaServer);
 
-        executor.execute(poller);
 
         Socket client1 = new Socket("localhost", sentenceServer.channel.socket().getLocalPort());
         Socket client2 = new Socket("localhost", commaServer.channel.socket().getLocalPort());

@@ -14,7 +14,6 @@ import java.util.stream.Collectors;
 public class ServerSocketPoller implements Runnable {
 
     final Selector selector;
-    private final Map<Integer, Server> serverSockets = new ConcurrentHashMap<>();
 
     public ServerSocketPoller() {
         try {
@@ -26,9 +25,8 @@ public class ServerSocketPoller implements Runnable {
 
     public void registerServer(Server server) {
         try {
-            int port = server.channel.socket().getLocalPort();
-            serverSockets.put(port, server);
-            server.channel.register(selector, SelectionKey.OP_ACCEPT);
+            selector.wakeup();
+            server.channel.register(selector, SelectionKey.OP_ACCEPT, server);
             selector.wakeup();
         } catch (ClosedChannelException e) {
             throw new RuntimeException(e);
@@ -39,7 +37,7 @@ public class ServerSocketPoller implements Runnable {
     public void run() {
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                int keys = selector.select();
+                int keys = selector.select(1000);
                 if (keys > 0) {
                     Set<SelectionKey> selectionKeys = selector.selectedKeys();
                     selectionKeys
@@ -48,7 +46,7 @@ public class ServerSocketPoller implements Runnable {
                             .forEach(k -> {
                                 if (k.isAcceptable()) {
                                     accept(k);
-                                }else if (k.isReadable()) {
+                                } else if (k.isReadable()) {
                                     read(k);
                                 }
                             });
@@ -58,6 +56,7 @@ public class ServerSocketPoller implements Runnable {
                 throw new RuntimeException(e);
             }
         }
+        System.out.println("exit loop");
     }
 
     private void accept(SelectionKey key) {
@@ -65,8 +64,8 @@ public class ServerSocketPoller implements Runnable {
             ServerSocketChannel serverChannel = (ServerSocketChannel) key.channel();
             SocketChannel channel = serverChannel.accept();
             channel.configureBlocking(false);
-            channel.register(selector, SelectionKey.OP_READ, ByteBuffer.allocate(1000));
-        }catch(IOException e) {
+            channel.register(selector, SelectionKey.OP_READ, newBuffer());
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
@@ -74,16 +73,19 @@ public class ServerSocketPoller implements Runnable {
     private void read(SelectionKey key) {
         try {
             SocketChannel channel = (SocketChannel) key.channel();
-            ByteBuffer buffer = (ByteBuffer)key.attachment();
+            ByteBuffer buffer = (ByteBuffer) key.attachment();
             int numRead = channel.read(buffer);
             if (numRead < 0) {
                 channel.close();
                 key.cancel();
-            }else {
-                int port = channel.socket().getLocalPort();
-                key.attach(processBytes(serverSockets.get(port), buffer));
+            } else {
+                selector.keys().stream()
+                        .filter(k -> k.channel() instanceof ServerSocketChannel)
+                        .filter(k -> ((ServerSocketChannel) k.channel()).socket().getLocalPort() == channel.socket().getLocalPort())
+                        .map(k -> k.attachment())
+                        .forEach(server -> key.attach(processBytes((Server<?>) server, buffer)));
             }
-        }catch(IOException e) {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
@@ -99,6 +101,10 @@ public class ServerSocketPoller implements Runnable {
                 .forEach(server::consume);
 
         List<ByteBuffer> incomplete = completed.get(false);
-        return incomplete.isEmpty() ? ByteBuffer.allocate(1000) : incomplete.get(0);
+        return incomplete.isEmpty() ? newBuffer() : incomplete.get(0);
+    }
+
+    private ByteBuffer newBuffer() {
+        return ByteBuffer.allocate(1000);
     }
 }
