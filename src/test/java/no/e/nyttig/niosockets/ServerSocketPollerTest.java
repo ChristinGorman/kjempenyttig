@@ -96,6 +96,7 @@ public class ServerSocketPollerTest {
         Assert.assertEquals(expected, returned);
     }
 
+
     @After
     public void tearDown() {
         executor.shutdown();
