@@ -2,40 +2,39 @@ package no.e.nyttig.niosockets;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.net.SocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
+import java.util.List;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
-public class Server {
+public abstract class Server<T> {
 
-    final ServerSocketChannel myChannel;
+    public final ServerSocketChannel channel;
+    private final Consumer<T> output;
 
-    public final int port;
-    private final Consumer<byte[]> messageHandler;
-
-    public Server(String host, int port, Consumer<byte[]> messageHandler) {
-        this.port = port;
-        this.messageHandler = messageHandler;
-        InetSocketAddress myAddress = new InetSocketAddress(host, port);
-        myChannel = openServerSocket(myAddress);
+    public Server(Consumer<T> output) {
+        this.output = output;
+        this.channel = openServerSocket();
     }
 
-    private static ServerSocketChannel openServerSocket(InetSocketAddress address)  {
+
+    public static ServerSocketChannel openServerSocket()  {
         try {
             ServerSocketChannel serverChannel = ServerSocketChannel.open();
             serverChannel.configureBlocking(false);
-            serverChannel.socket().bind(address);
+            serverChannel.socket().bind(new InetSocketAddress(0));
             return serverChannel;
         }catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public void read(byte[] bytesRead) {
-        messageHandler.accept(bytesRead);
+    public abstract List<ByteBuffer> splitBuffer(ByteBuffer buffer);
+    public abstract boolean isComplete(ByteBuffer buffer);
+    public abstract T transform(ByteBuffer buffer);
+
+    public void consume(T t) {
+        output.accept(t);
     }
 }

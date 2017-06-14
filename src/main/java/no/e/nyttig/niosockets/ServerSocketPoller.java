@@ -5,16 +5,15 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 public class ServerSocketPoller implements Runnable {
 
-    private final Selector selector;
-    private final ExecutorService handler = Executors.newCachedThreadPool();
+    final Selector selector;
     private final Map<Integer, Server> serverSockets = new ConcurrentHashMap<>();
 
     public ServerSocketPoller() {
@@ -27,8 +26,10 @@ public class ServerSocketPoller implements Runnable {
 
     public void registerServer(Server server) {
         try {
-            server.myChannel.register(selector, SelectionKey.OP_ACCEPT, server.port);
-            serverSockets.put(server.port, server);
+            int port = server.channel.socket().getLocalPort();
+            serverSockets.put(port, server);
+            server.channel.register(selector, SelectionKey.OP_ACCEPT);
+            selector.wakeup();
         } catch (ClosedChannelException e) {
             throw new RuntimeException(e);
         }
@@ -38,7 +39,7 @@ public class ServerSocketPoller implements Runnable {
     public void run() {
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                int keys = selector.selectNow();
+                int keys = selector.select();
                 if (keys > 0) {
                     Set<SelectionKey> selectionKeys = selector.selectedKeys();
                     selectionKeys
@@ -47,10 +48,8 @@ public class ServerSocketPoller implements Runnable {
                             .forEach(k -> {
                                 if (k.isAcceptable()) {
                                     accept(k);
-                                }else if (k.isReadable() && serverSockets.containsKey(k.attachment())) {
-                                    byte[] bytesRead = read(k);
-                                    Server server = serverSockets.get(k.attachment());
-                                    handler.execute(() -> server.read(bytesRead));
+                                }else if (k.isReadable()) {
+                                    read(k);
                                 }
                             });
                     selectionKeys.clear();
@@ -66,35 +65,40 @@ public class ServerSocketPoller implements Runnable {
             ServerSocketChannel serverChannel = (ServerSocketChannel) key.channel();
             SocketChannel channel = serverChannel.accept();
             channel.configureBlocking(false);
-            Socket socket = channel.socket();
-            SocketAddress remoteAddr = socket.getRemoteSocketAddress();
-            System.out.println("Connected to: " + remoteAddr);
-
-            channel.register(selector, SelectionKey.OP_READ, key.attachment());
+            channel.register(selector, SelectionKey.OP_READ, ByteBuffer.allocate(1000));
         }catch(IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private byte[] read(SelectionKey key) {
+    private void read(SelectionKey key) {
         try {
             SocketChannel channel = (SocketChannel) key.channel();
-            ByteBuffer buffer = ByteBuffer.allocate(1024);
+            ByteBuffer buffer = (ByteBuffer)key.attachment();
             int numRead = channel.read(buffer);
             if (numRead < 0) {
-                Socket socket = channel.socket();
-                SocketAddress remoteAddr = socket.getRemoteSocketAddress();
-                System.out.println("Connection closed by client: " + remoteAddr);
                 channel.close();
                 key.cancel();
-                return new byte[0];
             }else {
-                byte[] read = new byte[numRead];
-                System.arraycopy(buffer.array(), 0, read, 0, numRead);
-                return read;
+                int port = channel.socket().getLocalPort();
+                key.attach(processBytes(serverSockets.get(port), buffer));
             }
         }catch(IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private <T> ByteBuffer processBytes(Server<T> server, ByteBuffer buffer) {
+        Map<Boolean, List<ByteBuffer>> completed = server
+                .splitBuffer(buffer)
+                .stream()
+                .collect(Collectors.partitioningBy(b -> server.isComplete(b)));
+
+        completed.get(true).stream()
+                .map(server::transform)
+                .forEach(server::consume);
+
+        List<ByteBuffer> incomplete = completed.get(false);
+        return incomplete.isEmpty() ? ByteBuffer.allocate(1000) : incomplete.get(0);
     }
 }
